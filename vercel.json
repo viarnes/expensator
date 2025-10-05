@@ -3,6 +3,10 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "devCommand": "npm run dev",
-  "outputDirectory": "dist"
+  "functions": {
+    "api/telegram-webhook.ts": {
+      "runtime": "nodejs20.x"
+    }
+  }
 }
 
