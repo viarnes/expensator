@@ -1,5 +1,6 @@
 import { TelegramBot } from 'typescript-telegram-bot-api';
 
+import { analyzeExpenseMessage } from '../agents/runtime.js';
 import { saveMessage } from '../db/messages.js';
 import { isSupportedMessage } from './types.js';
 import type { SupportedMessage } from './types.js';
@@ -10,7 +11,7 @@ import type {
 
 const allowedUsernames = new Set(['viarnes', 'besosyjoyas']);
 
-const acknowledgementText = 'Message received';
+const fallbackAcknowledgementText = 'Message received';
 
 let botInstance: TelegramBot | undefined;
 
@@ -41,20 +42,24 @@ async function persistMessage(message: SupportedMessage): Promise<void> {
   }
 }
 
-function buildSendMessageOptions(message: SupportedMessage): {
+function buildSendMessageOptions(
+  message: SupportedMessage,
+  text: string
+): {
   chat_id: number;
   text: string;
 } {
   return {
     chat_id: message.chat.id,
-    text: acknowledgementText
+    text
   };
 }
 
-function buildWebhookAcknowledgement(
+async function buildWebhookAcknowledgement(
   message: SupportedMessage
-): TelegramWebhookResponse {
-  const options = buildSendMessageOptions(message);
+): Promise<TelegramWebhookResponse> {
+  const responseText = await buildResponseText(message);
+  const options = buildSendMessageOptions(message, responseText);
 
   return {
     method: 'sendMessage',
@@ -109,7 +114,6 @@ export async function processUpdate(
   }
 
   await persistMessage(supportedMessage);
-
   return buildWebhookAcknowledgement(supportedMessage);
 }
 
@@ -125,8 +129,43 @@ async function handleIncomingMessage(
   await persistMessage(supportedMessage);
 
   try {
-    await bot.sendMessage(buildSendMessageOptions(supportedMessage));
+    const responseText = await buildResponseText(supportedMessage);
+    await bot.sendMessage(
+      buildSendMessageOptions(supportedMessage, responseText)
+    );
   } catch (error) {
     console.error('Failed to send Telegram acknowledgement', error);
   }
+}
+
+async function buildResponseText(message: SupportedMessage): Promise<string> {
+  try {
+    const analysis = await analyzeExpenseMessage({
+      text: extractMessageText(message),
+      username: message.from?.username
+    });
+
+    const trimmedReply = analysis.reply.trim();
+
+    if (trimmedReply.length === 0) {
+      return fallbackAcknowledgementText;
+    }
+
+    return trimmedReply;
+  } catch (error) {
+    console.error('Failed to generate agent response', error);
+    return fallbackAcknowledgementText;
+  }
+}
+
+function extractMessageText(message: SupportedMessage): string | null {
+  if ('text' in message && typeof message.text === 'string') {
+    return message.text;
+  }
+
+  if ('voice' in message && message.voice) {
+    return typeof message.caption === 'string' ? message.caption : null;
+  }
+
+  return null;
 }
