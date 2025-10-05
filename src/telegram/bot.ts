@@ -10,7 +10,57 @@ import type {
 
 const allowedUsernames = new Set(['viarnes', 'besosyjoyas']);
 
+const acknowledgementText = 'Message received';
+
 let botInstance: TelegramBot | undefined;
+
+export type TelegramWebhookResponse = {
+  method: 'sendMessage';
+  chat_id: number;
+  text: string;
+};
+
+function getSupportedMessage(message: Message): SupportedMessage | undefined {
+  const username = message.from?.username;
+  if (!username || !allowedUsernames.has(username)) {
+    return undefined;
+  }
+
+  if (!isSupportedMessage(message)) {
+    return undefined;
+  }
+
+  return message;
+}
+
+async function persistMessage(message: SupportedMessage): Promise<void> {
+  try {
+    await saveMessage(message);
+  } catch (error) {
+    console.error('Failed to store message', error);
+  }
+}
+
+function buildSendMessageOptions(message: SupportedMessage): {
+  chat_id: number;
+  text: string;
+} {
+  return {
+    chat_id: message.chat.id,
+    text: acknowledgementText
+  };
+}
+
+function buildWebhookAcknowledgement(
+  message: SupportedMessage
+): TelegramWebhookResponse {
+  const options = buildSendMessageOptions(message);
+
+  return {
+    method: 'sendMessage',
+    ...options
+  };
+}
 
 export function getBot(): TelegramBot {
   if (botInstance) {
@@ -44,37 +94,38 @@ export async function startBotPolling(): Promise<void> {
   await bot.startPolling();
 }
 
-export async function processUpdate(update: Update): Promise<void> {
-  const bot = getBot();
-  await bot.processUpdate(update);
+export async function processUpdate(
+  update: Update
+): Promise<TelegramWebhookResponse | undefined> {
+  const message = update.message;
+
+  if (!message) {
+    return undefined;
+  }
+
+  const supportedMessage = getSupportedMessage(message);
+  if (!supportedMessage) {
+    return undefined;
+  }
+
+  await persistMessage(supportedMessage);
+
+  return buildWebhookAcknowledgement(supportedMessage);
 }
 
 async function handleIncomingMessage(
   bot: TelegramBot,
   message: Message
 ): Promise<void> {
-  const username = message.from?.username;
-  if (!username || !allowedUsernames.has(username)) {
+  const supportedMessage = getSupportedMessage(message);
+  if (!supportedMessage) {
     return;
   }
 
-  if (!isSupportedMessage(message)) {
-    return;
-  }
-
-  const supportedMessage: SupportedMessage = message;
+  await persistMessage(supportedMessage);
 
   try {
-    await saveMessage(supportedMessage);
-  } catch (error) {
-    console.error('Failed to store message', error);
-  }
-
-  try {
-    await bot.sendMessage({
-      chat_id: message.chat.id,
-      text: 'Message received'
-    });
+    await bot.sendMessage(buildSendMessageOptions(supportedMessage));
   } catch (error) {
     console.error('Failed to send Telegram acknowledgement', error);
   }

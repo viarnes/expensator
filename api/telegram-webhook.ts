@@ -49,7 +49,13 @@ export default async function handler(
 
   try {
     await ensureSchema();
-    await processUpdate(body as Update);
+    const acknowledgement = await processUpdate(body as Update);
+
+    if (acknowledgement) {
+      res.status(200).json(acknowledgement);
+      return;
+    }
+
     res.status(200).json({ ok: true });
   } catch (error) {
     console.error('Failed to process Telegram update', error);
