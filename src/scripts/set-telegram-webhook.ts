@@ -2,10 +2,32 @@ import 'dotenv/config';
 
 import { getBot } from '../telegram/bot.js';
 
+function resolveWebhookUrl(): string | undefined {
+  const explicitUrl = process.env.TELEGRAM_WEBHOOK_URL?.trim();
+  if (explicitUrl) {
+    return explicitUrl;
+  }
+
+  const vercelDomain = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (!vercelDomain) {
+    return undefined;
+  }
+
+  const normalizedDomain = vercelDomain.startsWith('http')
+    ? vercelDomain
+    : `https://${vercelDomain}`;
+
+  const withoutTrailingSlash = normalizedDomain.replace(/\/$/, '');
+
+  return `${withoutTrailingSlash}/api/telegram-webhook`;
+}
+
 async function main(): Promise<void> {
-  const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
+  const webhookUrl = resolveWebhookUrl();
   if (!webhookUrl) {
-    throw new Error('TELEGRAM_WEBHOOK_URL is not set');
+    throw new Error(
+      'Webhook URL missing. Set TELEGRAM_WEBHOOK_URL or VERCEL_PROJECT_PRODUCTION_URL.'
+    );
   }
 
   const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET;

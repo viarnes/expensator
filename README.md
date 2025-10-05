@@ -25,6 +25,8 @@ Copy `env.example` to `.env` and set the required secrets:
 - `OPENAI_API_KEY`
 - `TURSO_DATABASE_URL`
 - `TURSO_AUTH_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET` _(optional, but recommended for webhook verification)_
+- `VERCEL_PROJECT_PRODUCTION_URL` _(used by the webhook helper when TELEGRAM_WEBHOOK_URL is not set)_
 
 ## Database Schema
 
@@ -35,3 +37,12 @@ The initial schema lives in `db/schema.sql` and includes tables for `Records` an
 - Implement database client initialization and migrations
 - Configure OpenAI agent runtime
 - Wire up Telegram bot event handlers and business logic
+
+## Deployment & Webhook Automation
+
+- Production deployments run on Vercel. After each push to `main`, the GitHub Actions workflow `.github/workflows/set-telegram-webhook.yml` automatically reconfigures the Telegram webhook by running `npm run set-webhook`.
+- Provide the following repository secrets so the workflow can authenticate:
+  - `TELEGRAM_BOT_TOKEN`
+  - `TELEGRAM_WEBHOOK_SECRET` _(leave blank to skip secret validation)_
+  - `VERCEL_PROJECT_PRODUCTION_URL` (for example, `expensator.vercel.app`)
+- You can also trigger the workflow manually from the GitHub Actions tab if you need to reapply the webhook.
