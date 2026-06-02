@@ -4,7 +4,11 @@ import { analyzeExpenseMessage } from '../agents/runtime.js';
 import type { ExpenseAgentAnalysis } from '../agents/runtime.js';
 import { transcribeVoice } from '../agents/transcription.js';
 import { saveMessage } from '../db/messages.js';
-import { saveExpenseRecord } from '../db/records.js';
+import {
+  deleteLastExpenseRecord,
+  saveExpenseRecord,
+  sumCurrentMonthExpenses
+} from '../db/records.js';
 import { isSupportedMessage } from './types.js';
 import type { SupportedMessage } from './types.js';
 import type {
@@ -173,6 +177,11 @@ async function buildResponseText(message: SupportedMessage): Promise<string> {
       username
     });
 
+    const actionResponse = await runExpenseActions(analysis);
+    if (actionResponse) {
+      return actionResponse;
+    }
+
     await persistExpenseRecord(analysis, username);
 
     const trimmedReply = analysis.reply.trim();
@@ -186,6 +195,27 @@ async function buildResponseText(message: SupportedMessage): Promise<string> {
     console.error('Failed to generate agent response', error);
     return fallbackAcknowledgementText;
   }
+}
+
+async function runExpenseActions(
+  analysis: ExpenseAgentAnalysis
+): Promise<string | undefined> {
+  if (analysis.deleteLastExpense) {
+    const deleted = await deleteLastExpenseRecord();
+
+    if (!deleted) {
+      return 'No hay ningún gasto para borrar.';
+    }
+
+    return `Se borro el gasto de ${deleted.name} por $${deleted.amount}`;
+  }
+
+  if (analysis.sumMonthlyExpenses) {
+    const sum = await sumCurrentMonthExpenses();
+    return `Llevan gastados $${sum} en lo que va del mes`;
+  }
+
+  return undefined;
 }
 
 async function resolveMessageText(

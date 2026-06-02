@@ -8,6 +8,11 @@ export interface ExpenseRecordInput {
   amount: number;
 }
 
+export interface DeletedExpenseRecord {
+  name: string;
+  amount: number;
+}
+
 const DEFAULT_DIRECTION = 'OUT';
 const DEFAULT_CURRENCY = 'ARS';
 const DEFAULT_PAYMENT_METHOD = 'OTHER';
@@ -41,4 +46,51 @@ export async function saveExpenseRecord(input: ExpenseRecordInput): Promise<void
       DEFAULT_CATEGORY
     ]
   });
+}
+
+export async function deleteLastExpenseRecord(): Promise<DeletedExpenseRecord | null> {
+  const client = getDatabaseClient();
+
+  const selectResult = await client.execute({
+    sql: `
+      SELECT id, name, amount
+      FROM Records
+      WHERE direction = ?
+      ORDER BY created_at DESC, rowid DESC
+      LIMIT 1
+    `,
+    args: [DEFAULT_DIRECTION]
+  });
+
+  const row = selectResult.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  await client.execute({
+    sql: 'DELETE FROM Records WHERE id = ?',
+    args: [row.id as string]
+  });
+
+  return {
+    name: row.name as string,
+    amount: Number(row.amount)
+  };
+}
+
+export async function sumCurrentMonthExpenses(): Promise<number> {
+  const client = getDatabaseClient();
+
+  const result = await client.execute({
+    sql: `
+      SELECT COALESCE(SUM(amount), 0) AS total
+      FROM Records
+      WHERE direction = ?
+        AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+    `,
+    args: [DEFAULT_DIRECTION]
+  });
+
+  const total = result.rows[0]?.total;
+  return Number(total ?? 0);
 }
