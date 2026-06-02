@@ -2,6 +2,7 @@
 
 CREATE TABLE IF NOT EXISTS Records (
   id TEXT PRIMARY KEY,
+  user TEXT NOT NULL,
   name TEXT NOT NULL,
   direction TEXT NOT NULL CHECK (direction IN ('IN', 'OUT')),
   amount REAL NOT NULL,
@@ -10,6 +11,11 @@ CREATE TABLE IF NOT EXISTS Records (
   category TEXT NOT NULL CHECK (category IN ('HOUSING', 'FOOD_GROCERIES', 'TRANSPORTATION', 'PETS', 'LEISURE_ENTERTAINMENT', 'OTHER')),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Backfill the user column on databases created before it existed.
+-- This errors with "duplicate column" on fresh databases, which the
+-- schema manager ignores.
+ALTER TABLE Records ADD COLUMN user TEXT NOT NULL DEFAULT 'unknown';
 
 CREATE TABLE IF NOT EXISTS Messages (
   id TEXT PRIMARY KEY,

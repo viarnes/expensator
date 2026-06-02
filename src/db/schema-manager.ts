@@ -25,7 +25,7 @@ export async function syncDatabaseSchema(): Promise<void> {
   }
 
   for (const statement of statements) {
-    await client.execute(statement);
+    await executeStatement(client, statement);
   }
 
   await client.execute({
@@ -35,6 +35,27 @@ export async function syncDatabaseSchema(): Promise<void> {
     `,
     args: [schemaHash]
   });
+}
+
+async function executeStatement(
+  client: DatabaseClient,
+  statement: string
+): Promise<void> {
+  try {
+    await client.execute(statement);
+  } catch (error) {
+    // Additive ALTER ... ADD COLUMN statements fail on databases that already
+    // have the column (e.g. freshly created ones). These are safe to ignore.
+    if (isDuplicateColumnError(error)) {
+      return;
+    }
+    throw error;
+  }
+}
+
+function isDuplicateColumnError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /duplicate column name/i.test(message);
 }
 
 function splitStatements(sql: string): string[] {

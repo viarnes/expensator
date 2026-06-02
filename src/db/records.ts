@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { getDatabaseClient } from './client.js';
 
 export interface ExpenseRecordInput {
+  user: string;
   name: string;
   amount: number;
 }
@@ -19,6 +20,7 @@ export async function saveExpenseRecord(input: ExpenseRecordInput): Promise<void
     sql: `
       INSERT INTO Records (
         id,
+        user,
         name,
         direction,
         amount,
@@ -26,10 +28,11 @@ export async function saveExpenseRecord(input: ExpenseRecordInput): Promise<void
         payment_method,
         category
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
     args: [
       randomUUID(),
+      input.user,
       input.name,
       DEFAULT_DIRECTION,
       input.amount,

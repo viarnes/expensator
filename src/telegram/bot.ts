@@ -46,7 +46,8 @@ async function persistMessage(message: SupportedMessage): Promise<void> {
 }
 
 async function persistExpenseRecord(
-  analysis: ExpenseAgentAnalysis
+  analysis: ExpenseAgentAnalysis,
+  user: string
 ): Promise<void> {
   if (analysis.classification !== 'expense') {
     return;
@@ -62,7 +63,7 @@ async function persistExpenseRecord(
   }
 
   try {
-    await saveExpenseRecord({ name: detail, amount: analysis.amount });
+    await saveExpenseRecord({ user, name: detail, amount: analysis.amount });
   } catch (error) {
     console.error('Failed to store expense record', error);
   }
@@ -166,12 +167,13 @@ async function handleIncomingMessage(
 
 async function buildResponseText(message: SupportedMessage): Promise<string> {
   try {
+    const username = message.from?.username ?? 'unknown';
     const analysis = await analyzeExpenseMessage({
       text: await resolveMessageText(message),
-      username: message.from?.username
+      username
     });
 
-    await persistExpenseRecord(analysis);
+    await persistExpenseRecord(analysis, username);
 
     const trimmedReply = analysis.reply.trim();
 
