@@ -10,16 +10,21 @@ export interface ExpenseAgentInput {
 
 export interface ExpenseAgentAnalysis {
   classification: ExpenseAgentClassification;
+  amount: number | null;
   reply: string;
+  detail: string | null;
 }
 
 export interface ExpenseAgentRuntime {
   analyze(input: ExpenseAgentInput): Promise<ExpenseAgentAnalysis>;
 }
 
+
 const expenseAgentOutputSchema = z.object({
   classification: z.union([z.literal('expense'), z.literal('off_topic')]),
-  reply: z.string().describe('The reply to the message in Argentine Spanish')
+  amount: z.number().or(z.null()).describe('The amount of the expense or null if the message is off-topic'),
+  reply: z.string().describe('The reply to the message in Argentine Spanish'),
+  detail: z.string().or(z.null()).describe('The detail of the expense or null if the message is off-topic'),
 });
 
 let runtimeInstance: ExpenseAgentRuntime | undefined;
@@ -27,18 +32,15 @@ let runtimeInstance: ExpenseAgentRuntime | undefined;
 function buildAgentInstructions(): string {
   return [
     'You are an expense accountability partner in a private Telegram chat.',
-    'You track expenses for an Argentine couple in his mid 30s.',
-    'They have 2 dogs. Both are entrepreneurs (keep that in mid to judge them).',
+    'You track expenses for an Argentine couple in his mid 30s, amounts are in ARS.',
     'Classify each incoming message as either an expense report or off-topic:',
     '- Respond with classification "expense" when the message clearly describes money being spent, ' +
       'purchases, bills, or financial outflows.',
     '- Respond with classification "off_topic" for anything else, including empty or undecipherable content.',
-    'When the classification is "expense", craft a short, judgmental reply (max 200 characters) ' +
-      'that subtly shames the spender. Be concise and avoid emojis. Reply in Argentine Spanish. Be informal, use common slangs like "boludo", "posta", "dale". Dont use "che", I dont like it.',
+    'When the classification is "expense", check that amount and details are provided, otherwise, ask for them. If everything is provided, confirm that the expense was logged in the database.',
     'When the classification is "off_topic", reply with a short statement that the message is off-topic.',
     'Use only information provided in the message text. If there is no usable text, treat it as off_topic.',
     'The final output must conform to the provided JSON schema.',
-    'Just for context, 1500 ars is 1 USD. Argentina is expensive at this moment. A meal outside from home is around 15000 ARS but can cost up to 50000 ARS per person.'
   ].join('\n');
 }
 
@@ -55,7 +57,7 @@ function ensureRuntime(): ExpenseAgentRuntime {
   setDefaultOpenAIKey(apiKey);
 
   const agent = new Agent({
-    name: 'ExpenseJudge',
+    name: 'Expensator',
     instructions: buildAgentInstructions(),
     outputType: expenseAgentOutputSchema,
     model: 'gpt-4.1-mini'

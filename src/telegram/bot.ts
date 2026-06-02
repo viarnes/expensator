@@ -1,7 +1,10 @@
 import { TelegramBot } from 'typescript-telegram-bot-api';
 
 import { analyzeExpenseMessage } from '../agents/runtime.js';
+import type { ExpenseAgentAnalysis } from '../agents/runtime.js';
+import { transcribeVoice } from '../agents/transcription.js';
 import { saveMessage } from '../db/messages.js';
+import { saveExpenseRecord } from '../db/records.js';
 import { isSupportedMessage } from './types.js';
 import type { SupportedMessage } from './types.js';
 import type {
@@ -39,6 +42,29 @@ async function persistMessage(message: SupportedMessage): Promise<void> {
     await saveMessage(message);
   } catch (error) {
     console.error('Failed to store message', error);
+  }
+}
+
+async function persistExpenseRecord(
+  analysis: ExpenseAgentAnalysis
+): Promise<void> {
+  if (analysis.classification !== 'expense') {
+    return;
+  }
+
+  if (analysis.amount === null) {
+    return;
+  }
+
+  const detail = analysis.detail?.trim();
+  if (!detail) {
+    return;
+  }
+
+  try {
+    await saveExpenseRecord({ name: detail, amount: analysis.amount });
+  } catch (error) {
+    console.error('Failed to store expense record', error);
   }
 }
 
@@ -141,9 +167,11 @@ async function handleIncomingMessage(
 async function buildResponseText(message: SupportedMessage): Promise<string> {
   try {
     const analysis = await analyzeExpenseMessage({
-      text: extractMessageText(message),
+      text: await resolveMessageText(message),
       username: message.from?.username
     });
+
+    await persistExpenseRecord(analysis);
 
     const trimmedReply = analysis.reply.trim();
 
@@ -158,13 +186,29 @@ async function buildResponseText(message: SupportedMessage): Promise<string> {
   }
 }
 
-function extractMessageText(message: SupportedMessage): string | null {
+async function resolveMessageText(
+  message: SupportedMessage
+): Promise<string | null> {
   if ('text' in message && typeof message.text === 'string') {
     return message.text;
   }
 
   if ('voice' in message && message.voice) {
-    return typeof message.caption === 'string' ? message.caption : null;
+    const caption =
+      typeof message.caption === 'string' ? message.caption.trim() : '';
+
+    let transcript: string | null = null;
+    try {
+      transcript = await transcribeVoice(message.voice.file_id);
+    } catch (error) {
+      console.error('Failed to transcribe voice message', error);
+    }
+
+    const parts = [caption, transcript?.trim()].filter(
+      (part): part is string => Boolean(part && part.length > 0)
+    );
+
+    return parts.length > 0 ? parts.join('\n') : null;
   }
 
   return null;

@@ -27,6 +27,7 @@
     "@libsql/client": "^0.15.15",
     "@openai/agents": "^0.1.9",
     "dotenv": "^17.2.3",
+    "openai": "^5.23.2",
     "typescript-telegram-bot-api": "^0.10.0"
   },
   "devDependencies": {
