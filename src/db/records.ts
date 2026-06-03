@@ -13,6 +13,11 @@ export interface DeletedExpenseRecord {
   amount: number;
 }
 
+export interface MonthlyExpenseRecord {
+  name: string;
+  amount: number;
+}
+
 const DEFAULT_DIRECTION = 'OUT';
 const DEFAULT_CURRENCY = 'ARS';
 const DEFAULT_PAYMENT_METHOD = 'OTHER';
@@ -76,6 +81,26 @@ export async function deleteLastExpenseRecord(): Promise<DeletedExpenseRecord | 
     name: row.name as string,
     amount: Number(row.amount)
   };
+}
+
+export async function listCurrentMonthExpenses(): Promise<MonthlyExpenseRecord[]> {
+  const client = getDatabaseClient();
+
+  const result = await client.execute({
+    sql: `
+      SELECT name, amount
+      FROM Records
+      WHERE direction = ?
+        AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+      ORDER BY created_at ASC
+    `,
+    args: [DEFAULT_DIRECTION]
+  });
+
+  return result.rows.map((row) => ({
+    name: row.name as string,
+    amount: Number(row.amount)
+  }));
 }
 
 export async function sumCurrentMonthExpenses(): Promise<number> {

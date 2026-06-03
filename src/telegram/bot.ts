@@ -6,6 +6,7 @@ import { transcribeVoice } from '../agents/transcription.js';
 import { saveMessage } from '../db/messages.js';
 import {
   deleteLastExpenseRecord,
+  listCurrentMonthExpenses,
   saveExpenseRecord,
   sumCurrentMonthExpenses
 } from '../db/records.js';
@@ -213,6 +214,17 @@ async function runExpenseActions(
   if (analysis.sumMonthlyExpenses) {
     const sum = await sumCurrentMonthExpenses();
     return `Llevan gastados $${sum} en lo que va del mes`;
+  }
+
+  if (analysis.listMonthlyExpenses) {
+    const records = await listCurrentMonthExpenses();
+
+    if (records.length === 0) {
+      return 'No hay gastos registrados este mes.';
+    }
+
+    const lines = records.map((r) => `${r.name} $${r.amount}`);
+    return `Gastos del mes:\n${lines.join('\n')}`;
   }
 
   return undefined;
