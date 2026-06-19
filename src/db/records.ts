@@ -84,8 +84,8 @@ export async function deleteLastExpenseRecord(): Promise<DeletedExpenseRecord | 
 }
 
 export interface AmendLastExpenseInput {
-  name?: string;
-  amount?: number;
+  name: string | null;
+  amount: number | null;
 }
 
 export interface AmendedExpenseRecord {
@@ -114,8 +114,8 @@ export async function amendLastExpenseRecord(
     return null;
   }
 
-  const newName = input.name ?? (row.name as string);
-  const newAmount = input.amount ?? Number(row.amount);
+  const newName = input.name !== null ? input.name : (row.name as string);
+  const newAmount = input.amount !== null ? input.amount : Number(row.amount);
 
   await client.execute({
     sql: 'UPDATE Records SET name = ?, amount = ? WHERE id = ?',

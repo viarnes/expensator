@@ -9,8 +9,8 @@ export interface ExpenseAgentInput {
 }
 
 export interface AmendLastExpense {
-  name?: string;
-  amount?: number;
+  name: string | null;
+  amount: number | null;
 }
 
 export interface ExpenseAgentAnalysis {
@@ -39,10 +39,10 @@ const expenseAgentOutputSchema = z.object({
     .describe('True when the user asks to delete, undo, or remove the last logged expense'),
   amendLastExpense: z
     .object({
-      name: z.string().optional().describe('New name/detail for the last expense, if the user wants to change it'),
-      amount: z.number().optional().describe('New amount for the last expense, if the user wants to change it'),
+      name: z.string().nullable().describe('New name/detail for the last expense, or null if not changing'),
+      amount: z.number().nullable().describe('New amount for the last expense, or null if not changing'),
     })
-    .or(z.null())
+    .nullable()
     .describe('Set to an object with the fields to update when the user wants to amend the last expense name or amount. Null otherwise.'),
   sumMonthlyExpenses: z
     .boolean()
