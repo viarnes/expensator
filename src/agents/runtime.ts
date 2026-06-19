@@ -98,7 +98,7 @@ function ensureRuntime(): ExpenseAgentRuntime {
     name: 'Expensator',
     instructions: buildAgentInstructions(),
     outputType: expenseAgentOutputSchema,
-    model: 'gpt-4.1-mini'
+    model: 'gpt-4o-mini'
   });
 
   runtimeInstance = {
