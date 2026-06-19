@@ -89,10 +89,13 @@ function buildSendMessageOptions(
 
 async function buildWebhookAcknowledgement(
   message: SupportedMessage
-): Promise<TelegramWebhookResponse> {
+): Promise<TelegramWebhookResponse | undefined> {
   const responseText = await buildResponseText(message);
-  const options = buildSendMessageOptions(message, responseText);
+  if (responseText === null) {
+    return undefined;
+  }
 
+  const options = buildSendMessageOptions(message, responseText);
   return {
     method: 'sendMessage',
     ...options
@@ -162,21 +165,27 @@ async function handleIncomingMessage(
 
   try {
     const responseText = await buildResponseText(supportedMessage);
-    await bot.sendMessage(
-      buildSendMessageOptions(supportedMessage, responseText)
-    );
+    if (responseText !== null) {
+      await bot.sendMessage(
+        buildSendMessageOptions(supportedMessage, responseText)
+      );
+    }
   } catch (error) {
     console.error('Failed to send Telegram acknowledgement', error);
   }
 }
 
-async function buildResponseText(message: SupportedMessage): Promise<string> {
+async function buildResponseText(message: SupportedMessage): Promise<string | null> {
   try {
     const username = message.from?.username ?? 'unknown';
     const analysis = await analyzeExpenseMessage({
       text: await resolveMessageText(message),
       username
     });
+
+    if (analysis.classification === 'off_topic') {
+      return null;
+    }
 
     const actionResponse = await runExpenseActions(analysis);
     if (actionResponse) {

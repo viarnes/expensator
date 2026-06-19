@@ -50,7 +50,7 @@ function buildAgentInstructions(): string {
       'purchases, bills, or financial outflows.',
     '- Respond with classification "off_topic" for anything else, including empty or undecipherable content.',
     'When the classification is "expense", check that amount and details are provided, otherwise, ask for them. If everything is provided, confirm that the expense was logged in the database.',
-    'When the classification is "off_topic", engage naturally and warmly in the conversation — respond as a helpful, friendly assistant. Never say the message is off-topic.',
+    'When the classification is "off_topic", reply with a short statement that the message is off-topic.',
     'Set "deleteLastExpense" to true when the user asks to delete, undo, or remove the last logged expense ' +
       '(e.g. "borra el ultimo gasto", "eliminá lo último", "deshacé el último gasto"). Otherwise set it to false.',
     'Set "sumMonthlyExpenses" to true when the user asks how much has been spent so far this month ' +
