@@ -1,84 +1,81 @@
 import { Agent, run, setDefaultOpenAIKey } from '@openai/agents';
 import { z } from 'zod';
 
-export type ExpenseAgentClassification = 'expense' | 'off_topic';
+export type ExpenseAgentIntent =
+  | 'log_expense'
+  | 'delete_last'
+  | 'amend_last'
+  | 'sum_month'
+  | 'list_month'
+  | 'off_topic';
 
 export interface ExpenseAgentInput {
   text: string | null;
   username?: string;
 }
 
-export interface AmendLastExpense {
-  name: string | null;
-  amount: number | null;
-}
+const expenseAgentOutputSchema = z.object({
+  intent: z.enum(['log_expense', 'delete_last', 'amend_last', 'sum_month', 'list_month', 'off_topic']),
+  reply: z
+    .string()
+    .describe(
+      'Reply in Argentine Spanish. For delete_last/amend_last/sum_month/list_month it is a placeholder the system overwrites after running the action.',
+    ),
+  expense: z
+    .object({
+      name: z.string(),
+      amount: z.number(),
+    })
+    .nullable()
+    .describe(
+      'Set when intent is "log_expense" and both name and amount are present. Null otherwise, including when asking for a missing field.',
+    ),
+  amendLast: z
+    .object({
+      name: z.string().nullable().describe('New name/detail, or null if unchanged'),
+      amount: z.number().nullable().describe('New amount, or null if unchanged'),
+    })
+    .nullable()
+    .describe('Set when intent is "amend_last", with only the fields being changed. Null otherwise.'),
+});
 
-export interface ExpenseAgentAnalysis {
-  classification: ExpenseAgentClassification;
-  amount: number | null;
-  reply: string;
-  detail: string | null;
-  deleteLastExpense: boolean;
-  amendLastExpense: AmendLastExpense | null;
-  sumMonthlyExpenses: boolean;
-  listMonthlyExpenses: boolean;
-}
+export type ExpenseAgentAnalysis = z.infer<typeof expenseAgentOutputSchema>;
 
 export interface ExpenseAgentRuntime {
   analyze(input: ExpenseAgentInput): Promise<ExpenseAgentAnalysis>;
 }
 
-
-const expenseAgentOutputSchema = z.object({
-  classification: z.union([z.literal('expense'), z.literal('off_topic')]),
-  amount: z.number().or(z.null()).describe('The amount of the expense or null if the message is off-topic'),
-  reply: z.string().describe('The reply to the message in Argentine Spanish'),
-  detail: z.string().or(z.null()).describe('The detail of the expense or null if the message is off-topic'),
-  deleteLastExpense: z
-    .boolean()
-    .describe('True when the user asks to delete, undo, or remove the last logged expense'),
-  amendLastExpense: z
-    .object({
-      name: z.string().nullable().describe('New name/detail for the last expense, or null if not changing'),
-      amount: z.number().nullable().describe('New amount for the last expense, or null if not changing'),
-    })
-    .nullable()
-    .describe('Set to an object with the fields to update when the user wants to amend the last expense name or amount. Null otherwise.'),
-  sumMonthlyExpenses: z
-    .boolean()
-    .describe('True when the user asks for the total amount spent so far in the current month'),
-  listMonthlyExpenses: z
-    .boolean()
-    .describe('True when the user asks to see the list of all expenses for the current month'),
-});
-
 let runtimeInstance: ExpenseAgentRuntime | undefined;
 
 function buildAgentInstructions(): string {
   return [
-    'You are an expense accountability partner in a private Telegram chat.',
-    'You track expenses for an Argentine couple in his mid 30s, amounts are in ARS.',
-    'Classify each incoming message as either an expense report or off-topic:',
-    '- Respond with classification "expense" when the message clearly describes money being spent, ' +
-      'purchases, bills, or financial outflows.',
-    '- Respond with classification "off_topic" for anything else, including empty or undecipherable content.',
-    'When the classification is "expense", check that amount and details are provided, otherwise, ask for them. If everything is provided, confirm that the expense was logged in the database.',
-    'When the classification is "off_topic", reply with a short statement that the message is off-topic.',
-    'Set "deleteLastExpense" to true when the user asks to delete, undo, or remove the last logged expense ' +
-      '(e.g. "borra el ultimo gasto", "eliminá lo último", "deshacé el último gasto"). Otherwise set it to false.',
-    'Set "amendLastExpense" to an object when the user wants to correct or update the last logged expense ' +
-      '(e.g. "cambia el importe del gasto anterior por 500", "modifica el nombre del gasto por supermercado", ' +
-      '"el monto era 1200", "corregí el último gasto, era 300"). ' +
-      'Include "name" if the user specifies a new name/detail, include "amount" if a new amount is given. ' +
-      'Set "amendLastExpense" to null otherwise.',
-    'Set "sumMonthlyExpenses" to true when the user asks how much has been spent so far this month ' +
-      '(e.g. "cuánto llevamos gastado este mes", "sumá los gastos del mes", "total?", "cuánto va?", "el total?", "total del mes?"). Otherwise set it to false.',
-    'Set "listMonthlyExpenses" to true when the user asks to see the list or detail of all expenses for the current month ' +
-      '(e.g. "mostrame los gastos del mes", "qué gastamos este mes", "listá los gastos"). Otherwise set it to false.',
-    'When "deleteLastExpense", "sumMonthlyExpenses", or "listMonthlyExpenses" is true, you may leave "reply" as a short placeholder, ' +
-      'since the confirmation message is generated by the system after the action runs.',
-    'Use only information provided in the message text. If there is no usable text, treat it as off_topic.',
-    'The final output must conform to the provided JSON schema.',
+    'You are an expense-tracking assistant in a private Telegram chat used by an Argentine couple (mid-30s). Amounts are in ARS.',
+    'Read each incoming message, route it to exactly one intent, and extract structured data when relevant. The system runs the matching DB action and, for some intents, writes the user-facing confirmation.',
+
+    'Pick exactly one "intent":',
+    '- "log_expense": the message reports money spent — a purchase, bill, or any outflow.',
+    '- "delete_last": delete/undo/remove the last logged expense (e.g. "borrá el último gasto", "eliminá lo último", "deshacé el último").',
+    '- "amend_last": correct the last logged expense (e.g. "cambiá el importe del anterior por 500", "el monto era 1200", "corregí el último, era supermercado").',
+    '- "sum_month": total spent so far this month (e.g. "cuánto llevamos?", "total?", "el total del mes?", "sumá los gastos").',
+    '- "list_month": show the list/detail of this month\'s expenses (e.g. "mostrame los gastos del mes", "qué gastamos?", "listá los gastos").',
+    '- "off_topic": anything else, including empty or undecipherable content.',
+
+    'Use only the message text. If there is no usable text, it is off_topic.',
+
+    'Structured fields:',
+    '- "expense": when intent is "log_expense" AND both a name and an amount are present, set { "name": string, "amount": number }. Otherwise null.',
+    '- "amendLast": when intent is "amend_last", set an object with only the field(s) being changed ("name" and/or "amount"). Otherwise null.',
+
+    'Amounts: output a plain number, no separators. Argentine format uses "." for thousands and "," for decimals ("1.500" → 1500, "1.500,50" → 1500.5). Resolve shorthand: "2k" → 2000, "mil quinientos" → 1500.',
+
+    'The "reply" field:',
+    '- "log_expense" with a complete expense: confirm in one short line, echoing the parsed name and amount.',
+    '- "log_expense" missing amount or name: set "expense" to null and ask only for what is missing.',
+    '- "delete_last" / "amend_last" / "sum_month" / "list_month": short placeholder only — the system overwrites it after running the action.',
+    '- "off_topic": one short line saying it is not an expense.',
+
+    'Write all replies in Argentine Spanish (voseo), short and plain, no emojis unless the user uses them.',
+    'Output must conform to the provided JSON schema and nothing else.',
   ].join('\n');
 }
 

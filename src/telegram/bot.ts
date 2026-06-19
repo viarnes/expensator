@@ -53,21 +53,21 @@ async function persistExpenseRecord(
   analysis: ExpenseAgentAnalysis,
   user: string
 ): Promise<void> {
-  if (analysis.classification !== 'expense') {
+  if (analysis.intent !== 'log_expense') {
     return;
   }
 
-  if (analysis.amount === null) {
+  if (!analysis.expense) {
     return;
   }
 
-  const detail = analysis.detail?.trim();
-  if (!detail) {
+  const name = analysis.expense.name.trim();
+  if (!name) {
     return;
   }
 
   try {
-    await saveExpenseRecord({ user, name: detail, amount: analysis.amount });
+    await saveExpenseRecord({ user, name, amount: analysis.expense.amount });
   } catch (error) {
     console.error('Failed to store expense record', error);
   }
@@ -182,7 +182,7 @@ async function buildResponseText(message: SupportedMessage): Promise<string | nu
       username
     });
 
-    if (analysis.classification === 'off_topic') {
+    if (analysis.intent === 'off_topic') {
       return null;
     }
 
@@ -209,7 +209,7 @@ async function buildResponseText(message: SupportedMessage): Promise<string | nu
 async function runExpenseActions(
   analysis: ExpenseAgentAnalysis
 ): Promise<string | undefined> {
-  if (analysis.deleteLastExpense) {
+  if (analysis.intent === 'delete_last') {
     const deleted = await deleteLastExpenseRecord();
 
     if (!deleted) {
@@ -219,8 +219,10 @@ async function runExpenseActions(
     return `Se borro el gasto de ${deleted.name} por $${deleted.amount}`;
   }
 
-  if (analysis.amendLastExpense) {
-    const amended = await amendLastExpenseRecord(analysis.amendLastExpense);
+  if (analysis.intent === 'amend_last') {
+    const amended = await amendLastExpenseRecord(
+      analysis.amendLast ?? { name: null, amount: null }
+    );
 
     if (!amended) {
       return 'No hay ningún gasto para modificar.';
@@ -229,12 +231,12 @@ async function runExpenseActions(
     return `Gasto actualizado: ${amended.name} por $${amended.amount}`;
   }
 
-  if (analysis.sumMonthlyExpenses) {
+  if (analysis.intent === 'sum_month') {
     const sum = await sumCurrentMonthExpenses();
     return `Llevan gastados $${sum} en lo que va del mes`;
   }
 
-  if (analysis.listMonthlyExpenses) {
+  if (analysis.intent === 'list_month') {
     const records = await listCurrentMonthExpenses();
 
     if (records.length === 0) {
