@@ -8,12 +8,18 @@ export interface ExpenseAgentInput {
   username?: string;
 }
 
+export interface AmendLastExpense {
+  name?: string;
+  amount?: number;
+}
+
 export interface ExpenseAgentAnalysis {
   classification: ExpenseAgentClassification;
   amount: number | null;
   reply: string;
   detail: string | null;
   deleteLastExpense: boolean;
+  amendLastExpense: AmendLastExpense | null;
   sumMonthlyExpenses: boolean;
   listMonthlyExpenses: boolean;
 }
@@ -31,6 +37,13 @@ const expenseAgentOutputSchema = z.object({
   deleteLastExpense: z
     .boolean()
     .describe('True when the user asks to delete, undo, or remove the last logged expense'),
+  amendLastExpense: z
+    .object({
+      name: z.string().optional().describe('New name/detail for the last expense, if the user wants to change it'),
+      amount: z.number().optional().describe('New amount for the last expense, if the user wants to change it'),
+    })
+    .or(z.null())
+    .describe('Set to an object with the fields to update when the user wants to amend the last expense name or amount. Null otherwise.'),
   sumMonthlyExpenses: z
     .boolean()
     .describe('True when the user asks for the total amount spent so far in the current month'),
@@ -53,6 +66,11 @@ function buildAgentInstructions(): string {
     'When the classification is "off_topic", reply with a short statement that the message is off-topic.',
     'Set "deleteLastExpense" to true when the user asks to delete, undo, or remove the last logged expense ' +
       '(e.g. "borra el ultimo gasto", "eliminá lo último", "deshacé el último gasto"). Otherwise set it to false.',
+    'Set "amendLastExpense" to an object when the user wants to correct or update the last logged expense ' +
+      '(e.g. "cambia el importe del gasto anterior por 500", "modifica el nombre del gasto por supermercado", ' +
+      '"el monto era 1200", "corregí el último gasto, era 300"). ' +
+      'Include "name" if the user specifies a new name/detail, include "amount" if a new amount is given. ' +
+      'Set "amendLastExpense" to null otherwise.',
     'Set "sumMonthlyExpenses" to true when the user asks how much has been spent so far this month ' +
       '(e.g. "cuánto llevamos gastado este mes", "sumá los gastos del mes", "total?", "cuánto va?", "el total?", "total del mes?"). Otherwise set it to false.',
     'Set "listMonthlyExpenses" to true when the user asks to see the list or detail of all expenses for the current month ' +

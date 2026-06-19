@@ -83,6 +83,48 @@ export async function deleteLastExpenseRecord(): Promise<DeletedExpenseRecord | 
   };
 }
 
+export interface AmendLastExpenseInput {
+  name?: string;
+  amount?: number;
+}
+
+export interface AmendedExpenseRecord {
+  name: string;
+  amount: number;
+}
+
+export async function amendLastExpenseRecord(
+  input: AmendLastExpenseInput
+): Promise<AmendedExpenseRecord | null> {
+  const client = getDatabaseClient();
+
+  const selectResult = await client.execute({
+    sql: `
+      SELECT id, name, amount
+      FROM Records
+      WHERE direction = ?
+      ORDER BY created_at DESC, rowid DESC
+      LIMIT 1
+    `,
+    args: [DEFAULT_DIRECTION]
+  });
+
+  const row = selectResult.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  const newName = input.name ?? (row.name as string);
+  const newAmount = input.amount ?? Number(row.amount);
+
+  await client.execute({
+    sql: 'UPDATE Records SET name = ?, amount = ? WHERE id = ?',
+    args: [newName, newAmount, row.id as string]
+  });
+
+  return { name: newName, amount: newAmount };
+}
+
 export async function listCurrentMonthExpenses(): Promise<MonthlyExpenseRecord[]> {
   const client = getDatabaseClient();
 

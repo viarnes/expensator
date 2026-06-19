@@ -5,6 +5,7 @@ import type { ExpenseAgentAnalysis } from '../agents/runtime.js';
 import { transcribeVoice } from '../agents/transcription.js';
 import { saveMessage } from '../db/messages.js';
 import {
+  amendLastExpenseRecord,
   deleteLastExpenseRecord,
   listCurrentMonthExpenses,
   saveExpenseRecord,
@@ -218,6 +219,16 @@ async function runExpenseActions(
     }
 
     return `Se borro el gasto de ${deleted.name} por $${deleted.amount}`;
+  }
+
+  if (analysis.amendLastExpense) {
+    const amended = await amendLastExpenseRecord(analysis.amendLastExpense);
+
+    if (!amended) {
+      return 'No hay ningún gasto para modificar.';
+    }
+
+    return `Gasto actualizado: ${amended.name} por $${amended.amount}`;
   }
 
   if (analysis.sumMonthlyExpenses) {
