@@ -20,8 +20,6 @@ import type {
 
 const allowedUsernames = new Set(['viarnes', 'besosyjoyas']);
 
-const fallbackAcknowledgementText = 'Message received';
-
 let botInstance: TelegramBot | undefined;
 
 export type TelegramWebhookResponse = {
@@ -198,13 +196,13 @@ async function buildResponseText(message: SupportedMessage): Promise<string | nu
     const trimmedReply = analysis.reply.trim();
 
     if (trimmedReply.length === 0) {
-      return fallbackAcknowledgementText;
+      return null;
     }
 
     return trimmedReply;
   } catch (error) {
     console.error('Failed to generate agent response', error);
-    return fallbackAcknowledgementText;
+    return null;
   }
 }
 
